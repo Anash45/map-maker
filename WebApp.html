@@ -92,97 +92,89 @@
        * Line 2: Narrative text including the body part e.g. "My head hurts"
        * Line 4: A sentence including the pain severity e.g. "The pain is a 4"
        */
-      function parseNarrativeData(narrative) {
+       function parseNarrativeData(narrative) {
         const entries = narrative.trim().split("\n\n\n");
-        const dataEntries = [];
-
-        for (const entry of entries) {
-          const lines = entry.split("\n");
-
-          // Ensure that each entry has at least 4 lines
-          if (lines.length < 4) {
-            throw new Error("Invalid format: not enough lines");
-          }
-
-          // Timestamp format normalization
-          const timestamp = lines[0].replace('.', '').trim();
-
-          if (!timestamp) {
-            throw new Error("Invalid format: timestamp is missing");
-          }
-
-          // Body part extraction from second line
-          const bodyPartMatch = lines[1].toLowerCase().split("my ")[1].split(" ")[0];
-          const bodyPart = bodyPartMatch.charAt(0).toUpperCase() + bodyPartMatch.slice(1);
-
-          // Pain severity extraction from fourth line
-          const painSeverity = Math.min(parseInt(/is a (\d+)/.exec(lines[4])[1]), 6);
-
-          dataEntries.push({ timestamp, bodyPart, painSeverity });
-        }
-
-        return dataEntries;
-      }
-
+    
+        const data = entries.map(entry => {
+            const lines = entry.split("\n");
+    
+            if (lines.length < 4) {
+                throw new Error("Invalid format: not enough lines");
+            }
+    
+            const timestamp = lines[0].replace('.', '').trim();
+            const bodyPartMatch = lines[1].toLowerCase().split("my ")[1].split(" ")[0];
+            const bodyPart = bodyPartMatch.charAt(0).toUpperCase() + bodyPartMatch.slice(1);
+            const painSeverity = Math.min(parseInt(/is a (\d+)/.exec(lines[4])[1]), 6);
+    
+            return { timestamp, bodyPart, painSeverity };
+        });
+    
+        return data;
+    }
+    
       /**
        * Function to initialize the chart with the parsed data.
        * 
        * It uses Chart.js to render a line chart within the 'painChart' canvas element.
        */
-      function initializeChart(dataEntries) {
-        const timestamps = Array.from(new Set(dataEntries.map(entry => entry.timestamp)));
-        const bodyParts = Array.from(new Set(dataEntries.map(entry => entry.bodyPart)));
+       function initializeChart(data) {
+        console.log(data);
         const colors = ['red', 'blue', 'green'];
-
+    
+        const bodyParts = Array.from(new Set(data.map(entry => entry.bodyPart))); // Get unique body parts
+        const timestamps = Array.from(new Set(data.map(entry => entry.timestamp))); // Get unique timestamps
+    
         const datasets = bodyParts.map((bodyPart, index) => {
-          const dataPoints = timestamps.map(timestamp => {
-            const entry = dataEntries.find(e => e.timestamp === timestamp && e.bodyPart === bodyPart);
-            return entry ? entry.painSeverity : 0;
-          });
-
-          return {
-            label: bodyPart,
-            data: dataPoints,
-            backgroundColor: colors[index % colors.length],
-            borderColor: colors[index % colors.length],
-            borderWidth: 1,
-          };
+            const painData = timestamps.map(timestamp => {
+                const matchingEntry = data.find(entry => entry.bodyPart === bodyPart && entry.timestamp === timestamp);
+                return matchingEntry ? matchingEntry.painSeverity : 0;
+            });
+    
+            return {
+                label: bodyPart,
+                data: painData,
+                fill: false,
+                borderColor: colors[index % colors.length],
+            };
         });
-
-        const config = {
-          type: 'bar',
-          data: {
+    
+        const chartData = {
             labels: timestamps,
             datasets: datasets,
-          },
-          options: {
-            scales: {
-              x: {
-                stacked: false,
-              },
-              y: {
-                stacked: false,
-              },
-            },
-          },
         };
-
+    
+        const config = {
+            type: 'line',
+            data: chartData,
+            options: {
+                scales: {
+                    x: {
+                        type: 'category',
+                        labels: timestamps,
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 6,
+                    },
+                },
+            },
+        };
+    
         // Clear any previous chart instance before creating a new one
         if (window.painChart instanceof Chart) {
-          window.painChart.destroy();
+            window.painChart.destroy();
         }
-
+    
         window.painChart = new Chart(document.getElementById('painChart').getContext('2d'), config);
-      }
-
-
-
+    }
+    
       // Event listener for the "Generate Graph" button
       document.getElementById('generate-graph').addEventListener('click', function () {
         try {
           const narrative = document.getElementById('data-input').value;
           const parsedData = parseNarrativeData(narrative);
-          console.log(parsedData);
+          //console.log(parsedData);
           initializeChart(parsedData);
           document.getElementById('error-message').style.display = 'none';
           document.getElementById('painChart').style.display = 'block';
