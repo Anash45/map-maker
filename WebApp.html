@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pain Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        margin: 0;
+        padding: 20px;
+      }
+
+      .container {
+        background: #fff;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        max-width: 600px;
+        margin: 50px auto;
+      }
+
+      .textarea {
+        width: 100%;
+        height: 150px;
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px solid #ddd;
+        margin-top: 10px;
+      }
+
+      button {
+        padding: 10px 20px;
+        margin-top: 15px;
+        background: #007bff;
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        display: block;
+        width: 100%;
+      }
+
+      button:hover {
+        background: #0056b3;
+      }
+
+      #error-message {
+        color: #ff0000;
+        margin-top: 10px;
+        display: none;
+      }
+
+      canvas {
+        margin-top: 20px;
+        display: none;
+      }
+
+      #downloadButton {
+        display: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <h1>Pain Severity Tracker</h1>
+      <textarea id="data-input" class="textarea" placeholder="Paste your data here"></textarea>
+      <button id="generate-graph">Generate Graph</button>
+      <div id="error-message"></div>
+      <canvas id="painChart"></canvas>
+      <button id="downloadButton">Download Graph</button>
+    </div>
+    <script>
+      /**
+       * Utility function to parse narrative data based on the corrected parsing logic
+       *
+       * The narrative is expected to be a string where individual data entries are
+       * separated by two newline characters (
+      
+      ). Each entry should have at least
+       * four lines with the following information:
+       * 
+       * Line 1: Date and time in any string format (will be used as is)
+       * Line 2: Narrative text including the body part e.g. "My head hurts"
+       * Line 4: A sentence including the pain severity e.g. "The pain is a 4"
+       */
+      function parseNarrativeData(narrative) {
+        const entries = narrative.trim().split("\n\n\n");
+        const dataEntries = [];
+
+        for (const entry of entries) {
+          const lines = entry.split("\n");
+
+          // Ensure that each entry has at least 4 lines
+          if (lines.length < 4) {
+            throw new Error("Invalid format: not enough lines");
+          }
+
+          // Timestamp format normalization
+          const timestamp = lines[0].replace('.', '').trim();
+
+          if (!timestamp) {
+            throw new Error("Invalid format: timestamp is missing");
+          }
+
+          // Body part extraction from second line
+          const bodyPartMatch = lines[1].toLowerCase().split("my ")[1].split(" ")[0];
+          const bodyPart = bodyPartMatch.charAt(0).toUpperCase() + bodyPartMatch.slice(1);
+
+          // Pain severity extraction from fourth line
+          const painSeverity = Math.min(parseInt(/is a (\d+)/.exec(lines[4])[1]), 6);
+
+          dataEntries.push({ timestamp, bodyPart, painSeverity });
+        }
+
+        return dataEntries;
+      }
+
+      /**
+       * Function to initialize the chart with the parsed data.
+       * 
+       * It uses Chart.js to render a line chart within the 'painChart' canvas element.
+       */
+      function initializeChart(dataEntries) {
+        const timestamps = Array.from(new Set(dataEntries.map(entry => entry.timestamp)));
+        const bodyParts = Array.from(new Set(dataEntries.map(entry => entry.bodyPart)));
+        const colors = ['red', 'blue', 'green'];
+
+        const datasets = bodyParts.map((bodyPart, index) => {
+          const dataPoints = timestamps.map(timestamp => {
+            const entry = dataEntries.find(e => e.timestamp === timestamp && e.bodyPart === bodyPart);
+            return entry ? entry.painSeverity : 0;
+          });
+
+          return {
+            label: bodyPart,
+            data: dataPoints,
+            backgroundColor: colors[index % colors.length],
+            borderColor: colors[index % colors.length],
+            borderWidth: 1,
+          };
+        });
+
+        const config = {
+          type: 'bar',
+          data: {
+            labels: timestamps,
+            datasets: datasets,
+          },
+          options: {
+            scales: {
+              x: {
+                stacked: false,
+              },
+              y: {
+                stacked: false,
+              },
+            },
+          },
+        };
+
+        // Clear any previous chart instance before creating a new one
+        if (window.painChart instanceof Chart) {
+          window.painChart.destroy();
+        }
+
+        window.painChart = new Chart(document.getElementById('painChart').getContext('2d'), config);
+      }
+
+
+
+      // Event listener for the "Generate Graph" button
+      document.getElementById('generate-graph').addEventListener('click', function () {
+        try {
+          const narrative = document.getElementById('data-input').value;
+          const parsedData = parseNarrativeData(narrative);
+          console.log(parsedData);
+          initializeChart(parsedData);
+          document.getElementById('error-message').style.display = 'none';
+          document.getElementById('painChart').style.display = 'block';
+          document.getElementById('downloadButton').style.display = 'block';
+        } catch (e) {
+          document.getElementById('error-message').textContent = e.message;
+          document.getElementById('error-message').style.display = 'block';
+        }
+      });
+
+      // Add an event listener to the button for triggering the download
+      document.getElementById('downloadButton').addEventListener('click', downloadChart);
+
+      function downloadChart() {
+        // Get the chart canvas
+        const chartCanvas = document.getElementById('painChart');
+
+        // Create a temporary canvas to hold the chart image
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = chartCanvas.width;
+        tempCanvas.height = chartCanvas.height;
+
+        const tempCtx = tempCanvas.getContext('2d');
+
+        // Draw a white background on the temporary canvas
+        tempCtx.fillStyle = 'white';
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+        // Draw the chart image on the temporary canvas
+        tempCtx.drawImage(chartCanvas, 0, 0, chartCanvas.width, chartCanvas.height);
+
+        // Create a data URL for the chart image
+        const dataURL = tempCanvas.toDataURL('image/png');
+
+        // Create a link element and trigger a click event to start the download
+        const downloadLink = document.createElement('a');
+        downloadLink.href = dataURL;
+        downloadLink.download = 'pain_chart.png';
+
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+      }
+
+    </script>
+  </body>
+
+</html>
